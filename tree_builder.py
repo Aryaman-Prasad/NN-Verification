@@ -1,4 +1,4 @@
-from temp import *
+from node import *
 import numpy as np
 
 # Conjunction

@@ -1,28 +1,10 @@
 import onnx
 from onnx import helper, TensorProto
 import numpy as np
+from node import *
 
-# --- 1. The Logic Tree Classes ---
 
-class Node:
-    pass
-
-class And(Node):
-    def __init__(self, left: Node, right: Node):
-        self.left = left
-        self.right = right
-
-class Or(Node):
-    def __init__(self, left: Node, right: Node):
-        self.left = left
-        self.right = right
-
-class Leaf(Node):
-    def __init__(self, lin_exp: np.ndarray, bias: float):
-        self.lin_exp = lin_exp  # 1D numpy array: [feature_1, feature_2, ...]
-        self.bias = bias        # Scalar float
-
-# --- 2. The Logic Builder ---
+# --- 1. The Logic Builder ---
 
 def recursive_builder(node, current_input, node_list, initializers, path, input_dim):
     match node:
@@ -72,7 +54,7 @@ def recursive_builder(node, current_input, node_list, initializers, path, input_
             ))
             return leaf_out
 
-# --- 3. The Stitching Function ---
+# --- 2. The Stitching Function ---
 
 def attach_logic_to_onnx(base_model_path, logic_tree, output_path):
     # Load the pre-existing model
