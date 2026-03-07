@@ -11,47 +11,76 @@ def recursive_builder(node, current_input, node_list, initializers, path, input_
         case And(left=l, right=r):
             left_out = recursive_builder(l, current_input, node_list, initializers, path + "_L", input_dim)
             right_out = recursive_builder(r, current_input, node_list, initializers, path + "_R", input_dim)
-            
+
+            diff = f"diff_{path}"
+            relu_out = f"relu_{path}"
             output_name = f"and_out_{path}"
-            # Min represents the intersection of bounds (AND)
-            node_list.append(helper.make_node('Min', [left_out, right_out], [output_name], name=f"Min_{path}"))
+
+            # diff = right - left
+            node_list.append(helper.make_node(
+                'Sub', [right_out, left_out], [diff], name=f"Sub_{path}"
+            ))
+
+            # relu(diff)
+            node_list.append(helper.make_node(
+                'Relu', [diff], [relu_out], name=f"Relu_{path}"
+            ))
+
+            # min = right - relu(right-left)
+            node_list.append(helper.make_node(
+                'Sub', [right_out, relu_out], [output_name], name=f"MinViaRelu_{path}"
+            ))
+
             return output_name
 
         case Or(left=l, right=r):
             left_out = recursive_builder(l, current_input, node_list, initializers, path + "_L", input_dim)
             right_out = recursive_builder(r, current_input, node_list, initializers, path + "_R", input_dim)
-            
+
+            diff = f"diff_{path}"
+            relu_out = f"relu_{path}"
             output_name = f"or_out_{path}"
-            # Max represents the union of bounds (OR)
-            node_list.append(helper.make_node('Max', [left_out, right_out], [output_name], name=f"Max_{path}"))
+
+            # diff = right - left
+            node_list.append(helper.make_node(
+                'Sub', [right_out, left_out], [diff], name=f"Sub_{path}"
+            ))
+
+            # relu(diff)
+            node_list.append(helper.make_node(
+                'Relu', [diff], [relu_out], name=f"Relu_{path}"
+            ))
+
+            # max = left + relu(right-left)
+            node_list.append(helper.make_node(
+                'Add', [left_out, relu_out], [output_name], name=f"MaxViaRelu_{path}"
+            ))
+
             return output_name
 
         case Leaf(lin_exp=weights, bias=b):
             w_name = f"W_{path}"
             b_name = f"B_{path}"
             leaf_out = f"leaf_out_{path}"
-            
-            # Ensure weights are 2D for Gemm: [1, input_dim]
-            # Since lin_exp is 1D [dim], we reshape to [1, dim]
+
             weight_data = weights.astype(np.float32).reshape(1, input_dim)
-            
+
             initializers.append(helper.make_tensor(
                 w_name, TensorProto.FLOAT, [1, input_dim], weight_data.flatten()
             ))
+
             initializers.append(helper.make_tensor(
                 b_name, TensorProto.FLOAT, [1], [float(b)]
             ))
-            
-            # GEMM: Y = A * B + C 
-            # where A is input [1, dim], B is weight [dim, 1], C is bias [1]
-            # We use transB=1 to perform [1, dim] @ [1, dim].T + [1]
+
             node_list.append(helper.make_node(
                 'Gemm',
                 inputs=[current_input, w_name, b_name],
                 outputs=[leaf_out],
                 name=f"Gemm_Leaf_{path}",
-                transB=1  # Transposes [1, dim] to [dim, 1] internally
+                transB=1
             ))
+
             return leaf_out
 
 # --- 2. The Stitching Function ---

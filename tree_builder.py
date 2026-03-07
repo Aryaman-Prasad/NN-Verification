@@ -50,6 +50,23 @@ def c_max_prop(n : int, c : int):
 
     return conjunct(leafnodes)
 
+#y_i > y_c for all i from 1 to n (!= c)
+def c_min_prop(n : int, c : int):
+
+    # Creation of leaf nodes
+    leafnodes = []
+    for i in range(n):
+        if i+1 == c:
+            continue
+        lin_map = np.zeros(n)
+        lin_map[c-1] = -1
+        lin_map[i] = 1
+        lin_map = lin_map.astype(float)
+        leafnode = Leaf(lin_map, 0.0)
+        leafnodes.append(leafnode)
+
+    return conjunct(leafnodes)
+
 # CONF(N(x), N^(x)) < r, here r is threshold
 def conf_under_r(n : int, r : float):
     delta = -np.log(100.0/r - 1) # r is assumed to be from 0 to 100

@@ -16,3 +16,11 @@ We implement
 2. OR between two expression by taking their max
 
 The implementation works by first creating a logical formula in the form of a binary tree depending on the property we need to check . It then converts this logical formula into a set of ONNX layers which it attaches to the given model.
+
+Testing :
+The vnncomp2022_benchmarks folder contains Neural Networks and properties to verify them on. As of now, main.py is used to take the NN and output the appended NN. The property will have to be slightly altered to work with the appended NN (since it only has a single output).
+
+Run alpha-beta-crown as follows: (assuming you are in ./alpha-beta-CROWN/complete_verifier directory)
+python abcrown.py --config ../../test.yaml
+
+test.yaml is the config file for passing the NN and property along with additional parameters/flags
