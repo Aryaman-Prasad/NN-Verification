@@ -24,3 +24,8 @@ Run alpha-beta-crown as follows: (assuming you are in ./alpha-beta-CROWN/complet
 python abcrown.py --config ../../test.yaml
 
 test.yaml is the config file for passing the NN and property along with additional parameters/flags
+
+To run all benchmarks of a specific kind for a specific NN, run:
+python test.py --original or python test.py --appended
+
+Note that you will need to enter valid parameters inside the test.py code in order to run for various benchmarks and NN's, results will be stored in a csv
