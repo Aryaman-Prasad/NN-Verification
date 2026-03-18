@@ -11,19 +11,10 @@ from pathlib import Path
 
 # Parameters
 
-ORIGINAL_ONNX = "vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x2.onnx"
-APPENDED_ONNX = {
-    0: "vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x2_ext0.onnx",
-    1: "vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x2_ext1.onnx",
-    2: "vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x2_ext2.onnx",
-    3: "vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x2_ext3.onnx",
-    4: "vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x2_ext4.onnx",
-    5: "vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x2_ext5.onnx",
-    6: "vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x2_ext6.onnx",
-    7: "vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x2_ext7.onnx",
-    8: "vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x2_ext8.onnx",
-    9: "vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x2_ext9.onnx",
-}
+ORIGINAL_ONNX = "vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x4.onnx"
+APPENDED_ONNX = {}
+for i in range(10):
+    APPENDED_ONNX[i] = ORIGINAL_ONNX[:-5] + "_ext" + str(i) + ".onnx"
 
 PROPERTY_FOLDER = "vnncomp2022_benchmarks/benchmarks/mnist_fc/vnnlib"
 
@@ -31,7 +22,7 @@ ABCROWN_SCRIPT = "alpha-beta-CROWN/complete_verifier/abcrown.py"
 
 TIMEOUT = 300
 
-RESULT_CSV = "results_mnist_fc.csv"
+RESULT_CSV = "results/results_mnist_fc_256x4_appended.csv"
 
 ##########################################################################################
 
@@ -60,7 +51,7 @@ def create_alt_property(original_path):
     - Keep all X_i declarations and constraints
     - Keep only Y_0 declaration
     - Remove Y_1..Y_9 declarations
-    - Replace final property with (assert (>= Y_0 0.0))
+    - Replace final property with (assert (<= Y_0 0.0))
     """
 
     alt_path = original_path.replace(".vnnlib", "_alt.vnnlib")
@@ -84,7 +75,7 @@ def create_alt_property(original_path):
 
     # Add new property
     new_lines.append("\n")
-    new_lines.append("(assert (>= Y_0 0.0))\n")
+    new_lines.append("(assert (<= Y_0 0.0))\n")
 
     with open(alt_path, "w") as f:
         f.writelines(new_lines)
@@ -145,7 +136,7 @@ def run_abcrown(onnx_path, property_path):
 
 def run_experiment(mode):
 
-    property_files = sorted(Path(PROPERTY_FOLDER).glob("*.vnnlib"))
+    property_files = sorted(p for p in Path(PROPERTY_FOLDER).glob("*.vnnlib") if "_alt" not in p.name)
 
     results = []
 

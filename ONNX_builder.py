@@ -59,14 +59,17 @@ def recursive_builder(node, current_input, node_list, initializers, path, input_
             return output_name
 
         case Leaf(lin_exp=weights, bias=b):
+
             w_name = f"W_{path}"
             b_name = f"B_{path}"
+
+            matmul_out = f"matmul_{path}"
             leaf_out = f"leaf_out_{path}"
 
-            weight_data = weights.astype(np.float32).reshape(1, input_dim)
+            weight_data = weights.astype(np.float32).reshape(input_dim, 1)
 
             initializers.append(helper.make_tensor(
-                w_name, TensorProto.FLOAT, [1, input_dim], weight_data.flatten()
+                w_name, TensorProto.FLOAT, [input_dim, 1], weight_data.flatten()
             ))
 
             initializers.append(helper.make_tensor(
@@ -74,11 +77,17 @@ def recursive_builder(node, current_input, node_list, initializers, path, input_
             ))
 
             node_list.append(helper.make_node(
-                'Gemm',
-                inputs=[current_input, w_name, b_name],
-                outputs=[leaf_out],
-                name=f"Gemm_Leaf_{path}",
-                transB=1
+                "MatMul",
+                [current_input, w_name],
+                [matmul_out],
+                name=f"MatMul_{path}"
+            ))
+
+            node_list.append(helper.make_node(
+                "Add",
+                [matmul_out, b_name],
+                [leaf_out],
+                name=f"Add_{path}"
             ))
 
             return leaf_out
@@ -114,7 +123,7 @@ def attach_logic_to_onnx(base_model_path, logic_tree, output_path):
     model.graph.initializer.extend(new_inits)
     
     # Update Model Output
-    new_out_info = helper.make_tensor_value_info(final_name, TensorProto.FLOAT, [1, 1])
+    new_out_info = helper.make_tensor_value_info(final_name, TensorProto.FLOAT, [None, 1])
     model.graph.output.pop()
     model.graph.output.append(new_out_info)
     

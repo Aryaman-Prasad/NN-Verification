@@ -1,8 +1,8 @@
 model:
-  onnx_path: vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x2_appended.onnx
+  onnx_path: vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x2_ext7.onnx
 
 specification:
-  vnnlib_path: vnncomp2022_benchmarks/benchmarks/mnist_fc/vnnlib/prop_0_0.03_alt.vnnlib
+  vnnlib_path: vnncomp2022_benchmarks/benchmarks/mnist_fc/vnnlib/prop_1_0.03.vnnlib
 
 solver:
   batch_size: 1
