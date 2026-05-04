@@ -1,10 +1,16 @@
 import os
 import re
 import csv
+import sys
+import onnx
 import argparse
 import subprocess
-import yaml
-import tempfile
+import math
+import argparse
+import time
+from maraboupy import Marabou
+from vnnlib.compat import read_vnnlib_simple
+import numpy as np
 from pathlib import Path
 
 ##########################################################################################
@@ -18,16 +24,38 @@ for i in range(10):
 
 PROPERTY_FOLDER = "vnncomp2022_benchmarks/benchmarks/mnist_fc/vnnlib"
 
-ABCROWN_SCRIPT = "alpha-beta-CROWN/complete_verifier/abcrown.py"
-
 TIMEOUT = 60
 
-TOLERANCE = -1e-3
-TOTAL_OUTPUT_CLASS = 9
-
-RESULT_CSV = "results/results_mnist_fc_256x4_relaxed_robust_v2.csv"
+RESULT_CSV = "results/results_mnist_fc_256x4_relaxed_robust_afzal_mara_50.csv"
 
 ##########################################################################################
+
+class suppress_output:
+    def __enter__(self):
+        self._stdout = sys.stdout
+        self._stderr = sys.stderr
+        sys.stdout = open(os.devnull, 'w')
+        sys.stderr = open(os.devnull, 'w')
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        sys.stdout.close()
+        sys.stderr.close()
+        sys.stdout = self._stdout
+        sys.stderr = self._stderr
+
+def get_counts(onnx_path):
+    model = onnx.load(onnx_path)
+    
+    # Get the first input and output (filtering out weights)
+    initializers = {n.name for n in model.graph.initializer}
+    inputs = [i for i in model.graph.input if i.name not in initializers]
+    output = model.graph.output[0]
+    
+    # Calculate total elements (ignore batch size if it's 0 or -1)
+    in_dims = [d.dim_value for d in inputs[0].type.tensor_type.shape.dim if d.dim_value > 0]
+    out_dims = [d.dim_value for d in output.type.tensor_type.shape.dim if d.dim_value > 0]
+    
+    return math.prod(in_dims), math.prod(out_dims)
 
 # Property alteration, essentially take the original property and replace the output nodes with a single node whose constraint is >= 0.0
 
@@ -47,6 +75,10 @@ def get_property_label(vnnlib_path):
 
     raise ValueError(f"Could not determine label from {vnnlib_path}")
 
+def vnn_parser(onnx_file,vnn_file):
+
+    num_inputs,num_outputs = get_counts(onnx_file)
+    return read_vnnlib_simple(vnn_file,num_inputs,num_outputs)
 
 def create_alt_property(original_path):
     """
@@ -71,7 +103,7 @@ def create_alt_property(original_path):
             break
 
         # Remove Y_1...Y_9 declarations
-        if re.match(r"\(declare-const Y_[1-9] Real\)", line):
+        if re.match(r"\(declare-const Y_[9] Real\)", line):
             continue
 
         new_lines.append(line)
@@ -79,70 +111,96 @@ def create_alt_property(original_path):
     # Add new property
     new_lines.append("\n")
 
+    # For 1st idea
+    new_lines.append("(assert (<= Y_0 0.0))\n")
+
     # For 2nd idea
     # new_lines.append("(assert (<= Y_0 0.9))\n")
 
-    # For 1st idea
-    new_lines.append("(assert (<= Y_0 0.0))\n")
+    # For afzal's idea
+    # new_lines.append("(assert (or\n")
+    # for idx in range(9):
+    #     new_lines.append(f"    (and (>= Y_{idx} {-0.001}))\n")
+    # new_lines.append("))\n")
+
+
+
+
 
     with open(alt_path, "w") as f:
         f.writelines(new_lines)
 
     return alt_path
 
-# Running alpha-beta-crown
+# Running marabou
 
-def run_abcrown(onnx_path, property_path, mode):
+def run_marabou_once(input_bound, coeffs, output_bound : float, onnx_file):
 
-    with open("test.yaml") as f:
-        config = yaml.safe_load(f)
+    options = Marabou.createOptions(verbosity = 0,timeoutInSeconds=TIMEOUT)
+    network = Marabou.read_onnx(onnx_file)
+    inputVars = network.inputVars[0][0] 
+    outputVars = network.outputVars[0]
 
-    config["model"]["onnx_path"] = onnx_path
-    config["specification"]["vnnlib_path"] = property_path
-    config["bab"]["timeout"] = TIMEOUT
+    inputVars = np.ravel(inputVars)
 
-    if mode == "appended":
-        config["solver"]["batch_size"] = 1
+    for i in range(len(input_bound)):
+        network.setLowerBound(inputVars[i],input_bound[i][0])
+        network.setUpperBound(inputVars[i],input_bound[i][1])
+
+    network.addInequality(outputVars[0],coeffs,output_bound)
+
+    with suppress_output():
+        s = time.time()
+        solution = network.solve(options=options)
+        e = time.time()
+
+    if solution is not None:
+        if(solution[0]=='sat'): return "sat", e-s
+        elif(solution[0]=='unsat'): return "unsat", e-s
+        elif(solution[0]=='TIMEOUT'): return "timeout", e-s
+        # for i in range(len(solution)):
+        #     print(solution[i])
+        #     print("\n \n")
+
     else:
-        config["solver"]["batch_size"] = 64
+        print("something has gone wrong")
+        Exception("This was never supposed to happen")
+        return "noooooo"
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as tmp:
+def run_marabou(onnx_path, property_path, mode):
 
-        yaml.dump(config, tmp)
-        config_path = tmp.name
+    # bound processing
+    bounds = vnn_parser(onnx_path, property_path)
+    input_bounds = bounds[0][0] # list of arrays (lb ,ub) form
+    output_bounds = bounds[0][1] # list of arrays (coeffs , ub)
 
-    cmd = [
-        "python",
-        ABCROWN_SCRIPT,
-        "--config",
-        config_path
-    ]
+    coeffs = []
+    ubs = []
 
-    try:
+    for vars, ub in output_bounds:
+        coeffs.append(vars[0])
+        ubs.append(ub[0][0])
 
-        result = subprocess.run(cmd, capture_output=True, text=True)
 
-        output = result.stdout + result.stderr
+    sat = False
+    tle = False
 
-        status = "error"
-        runtime = None
+    time = 0.0
 
-        if "Result: unsat" in output:
-            status = "unsat"
-        elif "Result: sat" in output:
-            status = "sat"
-        elif "timeout" in output.lower():
-            status = "timeout"
-
-        match = re.search(r"Time:\s*([0-9\.]+)", output)
-
-        if match:
-            runtime = float(match.group(1))
-
-        return status, runtime
-
-    except Exception:
-        return "error", None
+    for i in range(len(coeffs)):
+        out, t = run_marabou_once(input_bounds, coeffs[i], ubs[i], onnx_path)
+        time += t
+        if (out == "sat"): 
+            sat = True
+            break
+        if (time >= TIMEOUT): 
+            tle = True
+            break
+    
+    if sat: 
+        return "sat", time
+    elif tle : return "timeout", time
+    else: return "unsat", time
 
 
 # Main function for running an experiment
@@ -181,7 +239,7 @@ def run_experiment(mode):
 
         print(f"\nRunning property: {prop}")
 
-        status, runtime = run_abcrown(onnx_path, prop, mode)
+        status, runtime = run_marabou(onnx_path, prop, mode)
 
         print("Result:", status, "Time:", runtime)
 

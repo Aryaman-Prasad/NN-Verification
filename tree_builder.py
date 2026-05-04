@@ -72,8 +72,9 @@ def conf_under_r(n : int, r : float):
     delta = -np.log(100.0/r - 1) # r is assumed to be from 0 to 100
 
     disjunctnodes = []
-    leafnodes = []
+    
     for i in range(n):
+        leafnodes = []
         for j in range(n):
             if i == j:
                 continue
@@ -119,8 +120,10 @@ def print_tree(node, space=0, level_space=5):
 if __name__ == "__main__":
     label = 1
     num_outputs = 3
-    threshold = 60.0
+    threshold = 50.0
     assert(label >= 1 and label <= num_outputs)
     assert(threshold > 0 and threshold < 100)
-    root = build_relaxed_robustness(num_outputs, label, threshold)
+    # root = build_relaxed_robustness(num_outputs, label, threshold)
+    # root = conf_under_r(num_outputs, threshold)
+    root = c_max_prop(num_outputs, label)
     print_tree(root)
