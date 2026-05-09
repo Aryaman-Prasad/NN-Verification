@@ -40,6 +40,13 @@ times4.fillna(TIMEOUT, inplace = True)
 times5.fillna(TIMEOUT, inplace = True)
 times6.fillna(TIMEOUT, inplace = True)
 
+times1[csv1["result"] == "timeout"] = TIMEOUT
+times2[csv2["result"] == "timeout"] = TIMEOUT
+times3[csv3["result"] == "timeout"] = TIMEOUT
+times4[csv4["result"] == "timeout"] = TIMEOUT
+times5[csv5["result"] == "timeout"] = TIMEOUT
+times6[csv6["result"] == "timeout"] = TIMEOUT
+
 times1_sort = sorted(times1)
 times2_sort = sorted(times2)
 times3_sort = sorted(times3)
